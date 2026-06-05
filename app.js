@@ -54,10 +54,23 @@ function setupSearch() {
 }
 
 // ── News Loading ──────────────────────────────────────────────────────────────
+
+// Tech publisher RSS feeds — supported by rss2json.com free tier
+// (Google News RSS is blocked by rss2json; these publisher feeds work reliably)
+const LIVE_FEEDS = [
+  { url: 'https://techcrunch.com/tag/artificial-intelligence/feed/', label: 'TechCrunch' },
+  { url: 'https://venturebeat.com/category/ai/feed/', label: 'VentureBeat' },
+  { url: 'https://www.theverge.com/ai-artificial-intelligence/rss/index.xml', label: 'The Verge' },
+  { url: 'https://www.wired.com/feed/tag/artificial-intelligence/latest/rss', label: 'Wired' },
+  { url: 'https://feeds.arstechnica.com/arstechnica/technology-lab', label: 'Ars Technica' },
+  { url: 'https://www.technologyreview.com/feed/', label: 'MIT Tech Review' },
+  { url: 'https://feeds.feedburner.com/TheHackersNews', label: 'The Hacker News' },
+];
+
 async function loadNews(force = false) {
   const grid = document.getElementById('newsGrid');
   if (allNewsItems.length === 0 || force) {
-    grid.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Fetching latest AI news from Google News...</p></div>';
+    grid.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>Fetching latest AI news…</p></div>';
   }
   try {
     const liveItems = await fetchLiveNews();
@@ -74,95 +87,84 @@ async function loadNews(force = false) {
 }
 
 async function fetchLiveNews() {
-  // Google News RSS — real-time, no API key, always today's headlines
-  const feeds = [
-    { url: 'https://news.google.com/rss/search?q=OpenAI+ChatGPT+GPT&hl=en-US&gl=US&ceid=US:en', source: 'openai', label: 'OpenAI' },
-    { url: 'https://news.google.com/rss/search?q=Anthropic+Claude+AI&hl=en-US&gl=US&ceid=US:en', source: 'anthropic', label: 'Anthropic' },
-    { url: 'https://news.google.com/rss/search?q=Google+Gemini+DeepMind+AI&hl=en-US&gl=US&ceid=US:en', source: 'google', label: 'Google' },
-    { url: 'https://news.google.com/rss/search?q=Meta+AI+Llama+model&hl=en-US&gl=US&ceid=US:en', source: 'meta', label: 'Meta AI' },
-    { url: 'https://news.google.com/rss/search?q=Microsoft+Copilot+AI+Azure&hl=en-US&gl=US&ceid=US:en', source: 'microsoft', label: 'Microsoft' },
-    { url: 'https://news.google.com/rss/search?q=new+AI+tool+launch+2025&hl=en-US&gl=US&ceid=US:en', source: 'tools', label: 'New AI Tools' },
-    { url: 'https://news.google.com/rss/search?q=artificial+intelligence+breakthrough+2025&hl=en-US&gl=US&ceid=US:en', source: 'general', label: 'AI News' },
-  ];
-
-  const results = await Promise.allSettled(feeds.map(f => fetchRSS(f.url, f.source, f.label)));
+  const results = await Promise.allSettled(LIVE_FEEDS.map(f => fetchOneFeed(f.url, f.label)));
   const items = [];
-  results.forEach(r => { if (r.status === 'fulfilled') items.push(...r.value); });
-  return items;
+  results.forEach(r => { if (r.status === 'fulfilled' && r.value.length) items.push(...r.value); });
+  // Only keep articles that mention AI/ML topics
+  return items.filter(item => isAIRelated(item.title + ' ' + item.description));
 }
 
-async function fetchRSS(feedUrl, source, label) {
-  // Primary proxy: rss2json.com
+async function fetchOneFeed(feedUrl, feedLabel) {
+  // Primary: rss2json.com — supports major tech publisher RSS feeds
   try {
-    const url = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(feedUrl) + '&count=6';
-    const res = await fetch(url, { signal: AbortSignal.timeout(9000) });
-    if (!res.ok) throw new Error('rss2json HTTP ' + res.status);
+    const apiUrl = 'https://api.rss2json.com/v1/api.json?rss_url=' + encodeURIComponent(feedUrl) + '&count=8';
+    const res = await fetch(apiUrl, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    if (data.status !== 'ok' || !data.items?.length) throw new Error('No items');
-    return data.items.map((item, i) => buildNewsItem(
-      'live-' + source + '-' + i,
-      cleanTitle(item.title),
-      stripHTML(item.description || item.content || '').slice(0, 300),
-      source, label,
-      item.pubDate ? item.pubDate.slice(0, 10) : today(),
-      item.link || '#'
-    ));
-  } catch (_) {}
+    if (data.status !== 'ok' || !data.items?.length) throw new Error('No items from rss2json');
+    return data.items.map((item, i) => buildItem(feedUrl + i, item.title, item.description || item.content || '', item.pubDate?.slice(0, 10) || today(), item.link || '#', feedLabel));
+  } catch (e) { console.warn('rss2json failed for', feedLabel, e.message); }
 
-  // Fallback proxy: allorigins (returns raw XML)
+  // Fallback: allorigins raw proxy
   try {
-    const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(feedUrl);
-    const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(9000) });
-    if (!res.ok) throw new Error('allorigins HTTP ' + res.status);
-    const json = await res.json();
-    const parser = new DOMParser();
-    const xml = parser.parseFromString(json.contents, 'text/xml');
-    const items = [...xml.querySelectorAll('item')].slice(0, 6);
+    const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(feedUrl);
+    const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const xml = new DOMParser().parseFromString(await res.text(), 'text/xml');
+    const items = [...xml.querySelectorAll('item')].slice(0, 8);
     if (!items.length) throw new Error('No XML items');
-    return items.map((item, i) => buildNewsItem(
-      'live-' + source + '-' + i,
-      cleanTitle(item.querySelector('title')?.textContent || ''),
-      stripHTML(item.querySelector('description')?.textContent || '').slice(0, 300),
-      source, label,
+    return items.map((item, i) => buildItem(feedUrl + i,
+      item.querySelector('title')?.textContent || '',
+      item.querySelector('description')?.textContent || '',
       parseDate(item.querySelector('pubDate')?.textContent),
-      item.querySelector('link')?.textContent || '#'
-    ));
-  } catch (_) {}
+      item.querySelector('link')?.textContent || '#', feedLabel));
+  } catch (e) { console.warn('allorigins failed for', feedLabel, e.message); }
 
   // Last resort: corsproxy.io
-  const proxyUrl2 = 'https://corsproxy.io/?' + encodeURIComponent(feedUrl);
-  const res2 = await fetch(proxyUrl2, { signal: AbortSignal.timeout(9000) });
-  if (!res2.ok) throw new Error('corsproxy failed');
-  const xmlText = await res2.text();
-  const parser2 = new DOMParser();
-  const xml2 = parser2.parseFromString(xmlText, 'text/xml');
-  const items2 = [...xml2.querySelectorAll('item')].slice(0, 6);
-  if (!items2.length) throw new Error('No items');
-  return items2.map((item, i) => buildNewsItem(
-    'live-' + source + '-' + i,
-    cleanTitle(item.querySelector('title')?.textContent || ''),
-    stripHTML(item.querySelector('description')?.textContent || '').slice(0, 300),
-    source, label,
-    parseDate(item.querySelector('pubDate')?.textContent),
-    item.querySelector('link')?.textContent || '#'
-  ));
+  try {
+    const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(feedUrl);
+    const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(10000) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const xml = new DOMParser().parseFromString(await res.text(), 'text/xml');
+    const items = [...xml.querySelectorAll('item')].slice(0, 8);
+    if (!items.length) throw new Error('No XML items');
+    return items.map((item, i) => buildItem(feedUrl + i,
+      item.querySelector('title')?.textContent || '',
+      item.querySelector('description')?.textContent || '',
+      parseDate(item.querySelector('pubDate')?.textContent),
+      item.querySelector('link')?.textContent || '#', feedLabel));
+  } catch (e) { console.warn('corsproxy failed for', feedLabel, e.message); }
+
+  return [];
 }
 
-function buildNewsItem(id, title, description, source, sourceLabel, date, url) {
-  return { id, title, description, source, sourceLabel, date, url, live: true, tags: detectTags(title + ' ' + description), category: detectCategory(title) };
+function buildItem(id, rawTitle, rawDesc, date, url, feedLabel) {
+  const title = cleanText(rawTitle);
+  const description = stripHTML(rawDesc).slice(0, 280);
+  const text = title + ' ' + description;
+  const { source, sourceLabel } = detectSource(text);
+  return { id: 'live-' + id, title, description, source, sourceLabel, date, url, live: true, tags: detectTags(text), category: detectCategory(title), feedLabel };
 }
 
-function cleanTitle(title) {
-  // Google News appends " - Publisher Name" — strip it
-  return (title || '').replace(/\s*-\s*[^-]{2,40}$/, '').trim() || title;
+function detectSource(text) {
+  const t = text.toLowerCase();
+  if (/openai|chatgpt|gpt-?[3-9o]|\bsora\b|\bdall-?e\b/.test(t)) return { source: 'openai', sourceLabel: 'OpenAI' };
+  if (/anthropic|\bclaude\b/.test(t)) return { source: 'anthropic', sourceLabel: 'Anthropic' };
+  if (/\bgemini\b|deepmind|\bgoogle ai\b|google.*\bai\b/.test(t)) return { source: 'google', sourceLabel: 'Google' };
+  if (/\bllama\b|\bmeta ai\b|meta.*model/.test(t)) return { source: 'meta', sourceLabel: 'Meta AI' };
+  if (/microsoft|\bcopilot\b|azure.*ai|bing.*ai/.test(t)) return { source: 'microsoft', sourceLabel: 'Microsoft' };
+  if (/midjourney|stable diffusion|\bflux\b|runway|suno|udio|elevenlabs|cursor\b|perplexity/.test(t)) return { source: 'tools', sourceLabel: 'AI Tools' };
+  return { source: 'general', sourceLabel: 'AI News' };
 }
 
+function isAIRelated(text) {
+  return /\b(ai|artificial intelligence|machine learning|llm|gpt|claude|gemini|llama|copilot|chatgpt|openai|anthropic|deepmind|neural|chatbot|generative|transformer|diffusion)\b/i.test(text);
+}
+
+function cleanText(s) { return (s || '').replace(/\s+/g, ' ').replace(/<[^>]+>/g, '').trim(); }
+function stripHTML(html) { const d = document.createElement('div'); d.innerHTML = html; return d.textContent || d.innerText || ''; }
 function today() { return new Date().toISOString().slice(0, 10); }
-function parseDate(d) { if (!d) return today(); try { return new Date(d).toISOString().slice(0, 10); } catch { return today(); } }
-
-function stripHTML(html) {
-  const d = document.createElement('div'); d.innerHTML = html; return d.textContent || d.innerText || '';
-}
+function parseDate(d) { if (!d) return today(); try { const p = new Date(d); return isNaN(p) ? today() : p.toISOString().slice(0, 10); } catch { return today(); } }
 
 function detectTags(text) {
   const lower = (text || '').toLowerCase();
@@ -172,11 +174,11 @@ function detectTags(text) {
 
 function detectCategory(title) {
   const t = (title || '').toLowerCase();
-  if (t.includes('launch') || t.includes('release') || t.includes('introduce') || t.includes('unveil')) return 'Product Launch';
+  if (t.includes('launch') || t.includes('release') || t.includes('introduce') || t.includes('unveil') || t.includes('announce')) return 'Product Launch';
   if (t.includes('update') || t.includes('new feature') || t.includes('version')) return 'Feature Update';
-  if (t.includes('research') || t.includes('study') || t.includes('paper')) return 'Research';
-  if (t.includes('fund') || t.includes('invest') || t.includes('billion') || t.includes('valuat')) return 'Business';
-  if (t.includes('warn') || t.includes('risk') || t.includes('danger') || t.includes('regulat')) return 'Safety & Policy';
+  if (t.includes('research') || t.includes('study') || t.includes('paper') || t.includes('benchmark')) return 'Research';
+  if (t.includes('fund') || t.includes('invest') || t.includes('billion') || t.includes('valuat') || t.includes('deal')) return 'Business';
+  if (t.includes('warn') || t.includes('risk') || t.includes('danger') || t.includes('regulat') || t.includes('ban')) return 'Safety & Policy';
   return 'AI News';
 }
 
@@ -217,7 +219,7 @@ function renderNews() {
       <span class="tag" style="background:rgba(99,102,241,.1);color:var(--accent);">${esc(n.category)}</span>
     </div>
     <div class="news-footer">
-      <span style="font-size:11px;color:var(--text3);">${n.live ? '🌐 Google News (Live)' : '📌 Curated'}</span>
+      <span style="font-size:11px;color:var(--text3);">${n.live ? '🌐 ' + esc(n.feedLabel || 'Live') : '📌 Curated'}</span>
       <a class="read-more" href="${esc(n.url)}" target="_blank" onclick="event.stopPropagation()">Read more →</a>
     </div>
   </div>`).join('');
