@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Pulse — Latest AI News, Tools & Insights</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">AI <strong>Pulse</strong></span>
+      </div>
+      <nav class="nav">
+        <button class="nav-btn active" data-tab="news">📰 AI News</button>
+        <button class="nav-btn" data-tab="tools">🛠️ AI Tools</button>
+        <button class="nav-btn" data-tab="compare">⚖️ Compare</button>
+        <button class="nav-btn" data-tab="usecases">🏭 Industry Use Cases</button>
+      </nav>
+      <div class="header-actions">
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="globalSearch" placeholder="Search tools, news..." />
+        </div>
+        <button class="refresh-btn" id="refreshBtn" title="Refresh News">↻ Refresh</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <!-- ═══════════════════ NEWS TAB ═══════════════════ -->
+    <section id="tab-news" class="tab-content active">
+      <div class="section-header">
+        <h2>🌐 Latest AI News</h2>
+        <div class="filter-row">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="openai">OpenAI</button>
+          <button class="filter-btn" data-filter="google">Google</button>
+          <button class="filter-btn" data-filter="anthropic">Anthropic</button>
+          <button class="filter-btn" data-filter="meta">Meta</button>
+          <button class="filter-btn" data-filter="microsoft">Microsoft</button>
+          <button class="filter-btn" data-filter="tools">New Tools</button>
+        </div>
+        <div class="live-badge">🔴 LIVE FEED</div>
+      </div>
+      <div id="newsGrid" class="news-grid">
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Fetching latest AI news…</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ TOOLS TAB ═══════════════════ -->
+    <section id="tab-tools" class="tab-content">
+      <div class="section-header">
+        <h2>🛠️ AI Tools Directory</h2>
+        <div class="filter-row">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="llm">LLMs</button>
+          <button class="filter-btn" data-filter="image">Image Gen</button>
+          <button class="filter-btn" data-filter="code">Coding</button>
+          <button class="filter-btn" data-filter="video">Video</button>
+          <button class="filter-btn" data-filter="voice">Voice/Audio</button>
+          <button class="filter-btn" data-filter="productivity">Productivity</button>
+        </div>
+      </div>
+      <div id="toolsGrid" class="tools-grid"></div>
+    </section>
+
+    <!-- ═══════════════════ COMPARE TAB ═══════════════════ -->
+    <section id="tab-compare" class="tab-content">
+      <div class="section-header">
+        <h2>⚖️ AI Tool Comparisons & Version Diffs</h2>
+      </div>
+      <div class="compare-selector">
+        <div class="select-group">
+          <label>Tool A</label>
+          <select id="compareA"></select>
+        </div>
+        <div class="vs-badge">VS</div>
+        <div class="select-group">
+          <label>Tool B</label>
+          <select id="compareB"></select>
+        </div>
+        <button id="compareBtn" class="cta-btn">Compare Now</button>
+      </div>
+      <div id="compareResult" class="compare-result hidden"></div>
+
+      <div class="version-diff-section">
+        <h3>📋 Version Changelog & Diffs</h3>
+        <div id="versionDiffs" class="version-diffs-grid"></div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ USE CASES TAB ═══════════════════ -->
+    <section id="tab-usecases" class="tab-content">
+      <div class="section-header">
+        <h2>🏭 Industry Use Cases & Real-World Examples</h2>
+      </div>
+      <div class="industry-filter">
+        <button class="filter-btn active" data-filter="all">All Industries</button>
+        <button class="filter-btn" data-filter="healthcare">🏥 Healthcare</button>
+        <button class="filter-btn" data-filter="finance">💰 Finance</button>
+        <button class="filter-btn" data-filter="education">🎓 Education</button>
+        <button class="filter-btn" data-filter="retail">🛒 Retail</button>
+        <button class="filter-btn" data-filter="legal">⚖️ Legal</button>
+        <button class="filter-btn" data-filter="marketing">📣 Marketing</button>
+        <button class="filter-btn" data-filter="engineering">⚙️ Engineering</button>
+        <button class="filter-btn" data-filter="hr">👥 HR</button>
+      </div>
+      <div id="usecasesGrid" class="usecases-grid"></div>
+    </section>
+
+  </main>
+
+  <!-- Tool Detail Modal -->
+  <div id="toolModal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <button class="modal-close" id="modalClose">✕</button>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <p>⚡ AI Pulse — Real-time AI intelligence dashboard &nbsp;|&nbsp; Data refreshed every 30 min &nbsp;|&nbsp; <span id="lastUpdated"></span></p>
+  </footer>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
