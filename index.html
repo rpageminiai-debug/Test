@@ -9,7 +9,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
 </head>
 <body>
-  <!-- Header -->
   <header class="header">
     <div class="header-inner">
       <div class="logo">
@@ -33,8 +32,6 @@
   </header>
 
   <main class="main">
-
-    <!-- ═══════════════════ NEWS TAB ═══════════════════ -->
     <section id="tab-news" class="tab-content active">
       <div class="section-header">
         <h2>🌐 Latest AI News</h2>
@@ -50,14 +47,10 @@
         <div class="live-badge">🔴 LIVE FEED</div>
       </div>
       <div id="newsGrid" class="news-grid">
-        <div class="loading-state">
-          <div class="spinner"></div>
-          <p>Fetching latest AI news…</p>
-        </div>
+        <div class="loading-state"><div class="spinner"></div><p>Fetching latest AI news…</p></div>
       </div>
     </section>
 
-    <!-- ═══════════════════ TOOLS TAB ═══════════════════ -->
     <section id="tab-tools" class="tab-content">
       <div class="section-header">
         <h2>🛠️ AI Tools Directory</h2>
@@ -74,32 +67,23 @@
       <div id="toolsGrid" class="tools-grid"></div>
     </section>
 
-    <!-- ═══════════════════ COMPARE TAB ═══════════════════ -->
     <section id="tab-compare" class="tab-content">
       <div class="section-header">
         <h2>⚖️ AI Tool Comparisons & Version Diffs</h2>
       </div>
       <div class="compare-selector">
-        <div class="select-group">
-          <label>Tool A</label>
-          <select id="compareA"></select>
-        </div>
+        <div class="select-group"><label>Tool A</label><select id="compareA"></select></div>
         <div class="vs-badge">VS</div>
-        <div class="select-group">
-          <label>Tool B</label>
-          <select id="compareB"></select>
-        </div>
+        <div class="select-group"><label>Tool B</label><select id="compareB"></select></div>
         <button id="compareBtn" class="cta-btn">Compare Now</button>
       </div>
       <div id="compareResult" class="compare-result hidden"></div>
-
       <div class="version-diff-section">
         <h3>📋 Version Changelog & Diffs</h3>
         <div id="versionDiffs" class="version-diffs-grid"></div>
       </div>
     </section>
 
-    <!-- ═══════════════════ USE CASES TAB ═══════════════════ -->
     <section id="tab-usecases" class="tab-content">
       <div class="section-header">
         <h2>🏭 Industry Use Cases & Real-World Examples</h2>
@@ -117,10 +101,8 @@
       </div>
       <div id="usecasesGrid" class="usecases-grid"></div>
     </section>
-
   </main>
 
-  <!-- Tool Detail Modal -->
   <div id="toolModal" class="modal-overlay hidden">
     <div class="modal-box">
       <button class="modal-close" id="modalClose">✕</button>
