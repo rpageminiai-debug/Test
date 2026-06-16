@@ -1,0 +1,93 @@
+name: Deploy LTL Order Management to Azure
+
+# End-to-end, runs entirely in GitHub Actions:
+#   1. Logs in to Azure via OIDC (no stored passwords).
+#   2. Provisions infra (App Service + Azure SQL) from infra/main.bicep — idempotent.
+#   3. Builds the React SPA into the API and publishes the .NET app.
+#   4. Deploys to the App Service it just provisioned and prints the live URL.
+#
+# One-time setup (see ltl-order-management/DEPLOY.md):
+#   Repository secrets:   AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, SQL_ADMIN_PASSWORD
+#   Repository variables (optional): AZURE_RESOURCE_GROUP, AZURE_LOCATION, AZURE_ENV_NAME
+
+on:
+  push:
+    branches:
+      - claude/clever-ptolemy-ukmatu
+      - main
+    paths:
+      - "ltl-order-management/**"
+      - ".github/workflows/deploy-azure.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-azure
+  cancel-in-progress: false
+
+permissions:
+  id-token: write   # required for azure/login OIDC
+  contents: read
+
+env:
+  RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP || 'rg-ltl-orders' }}
+  LOCATION: ${{ vars.AZURE_LOCATION || 'eastus' }}
+  ENV_NAME: ${{ vars.AZURE_ENV_NAME || 'ltl-prod' }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ltl-order-management
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Provision infrastructure (Bicep)
+        id: provision
+        uses: azure/cli@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            set -euo pipefail
+            az group create --name "$RESOURCE_GROUP" --location "$LOCATION" 1>/dev/null
+            outputs=$(az deployment group create \
+              --resource-group "$RESOURCE_GROUP" \
+              --name "ltl-$GITHUB_RUN_ID" \
+              --template-file ltl-order-management/infra/main.bicep \
+              --parameters environmentName="$ENV_NAME" location="$LOCATION" \
+                           sqlAdminPassword="${{ secrets.SQL_ADMIN_PASSWORD }}" \
+              --query properties.outputs -o json)
+            echo "webapp_name=$(echo "$outputs" | jq -r .WEBAPP_NAME.value)" >> "$GITHUB_OUTPUT"
+            echo "web_uri=$(echo "$outputs" | jq -r .WEB_URI.value)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build React SPA into API wwwroot
+        run: bash scripts/build-frontend.sh
+
+      - name: Publish .NET API
+        run: dotnet publish backend/LtlOrderManagement.Api/LtlOrderManagement.Api.csproj -c Release -o ${{ runner.temp }}/publish
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ steps.provision.outputs.webapp_name }}
+          package: ${{ runner.temp }}/publish
+
+      - name: Publish live URL
+        run: echo "### ✅ Deployed to ${{ steps.provision.outputs.web_uri }}" >> "$GITHUB_STEP_SUMMARY"
