@@ -2,7 +2,10 @@ import type { Order, OrderField } from "../types/order";
 import { REQUIRED_FIELDS, CONDITIONAL_REQUIRED } from "../config/fieldConfig";
 
 export const FIELD_LABELS: Partial<Record<OrderField, string>> = {
+  quote: "Quote",
   paymentType: "Payment Type",
+  billToName: "Bill To Name", billToAddress: "Bill To Address", billToPhone: "Bill To Phone",
+  billToEmail: "Bill To Email", billToHours: "Bill To Hours",
   callerName: "Caller Name", callerAddress: "Caller Address", callerPhone: "Caller Phone",
   callerEmail: "Caller Email", callerHours: "Caller Hours",
   shipperName: "Shipper Name", shipperAddress: "Shipper Address", shipperPhone: "Shipper Phone",
