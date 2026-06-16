@@ -1,0 +1,16 @@
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# .NET
+backend/**/bin/
+backend/**/obj/
+
+# IDE / OS
+.vs/
+.idea/
+*.user
+.DS_Store
+
+# TypeScript build cache
+frontend/tsconfig.tsbuildinfo
