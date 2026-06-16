@@ -46,40 +46,57 @@ To tear everything down: `azd down`.
 
 ---
 
-## Option 2 — Provision once, then deploy via GitHub Actions
+## Option 2 — Everything in GitHub Actions (no local tooling)
 
-Use this if you want pushes to the branch to deploy automatically.
+The workflow `.github/workflows/deploy-azure.yml` does the **whole thing** in CI: logs in to
+Azure via OIDC, provisions the infra from `infra/main.bicep`, builds and publishes the app,
+deploys it, and prints the live URL in the run summary. You install nothing locally — you
+only authorize GitHub to deploy into your subscription **once**.
 
-### 1. Provision infrastructure
+### 1. Create an Azure identity for GitHub (OIDC, no passwords stored)
+
+Run these once (Azure Cloud Shell works), substituting your subscription id:
 
 ```bash
-az group create --name rg-ltl-orders --location eastus
+SUB=<your-subscription-id>
+APP_ID=$(az ad app create --display-name "github-ltl-orders" --query appId -o tsv)
+az ad sp create --id "$APP_ID"
+az role assignment create --assignee "$APP_ID" --role Contributor --scope "/subscriptions/$SUB"
 
-az deployment group create \
-  --resource-group rg-ltl-orders \
-  --template-file ltl-order-management/infra/main.bicep \
-  --parameters environmentName=ltl-prod sqlAdminPassword='<STRONG_PASSWORD>'
+# Federate the credential to this repo + branch
+az ad app federated-credential create --id "$APP_ID" --parameters '{
+  "name": "github-ltl-orders",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "subject": "repo:rpageminiai-debug/Test:ref:refs/heads/claude/clever-ptolemy-ukmatu",
+  "audiences": ["api://AzureADTokenExchange"]
+}'
+
+az ad app show --id "$APP_ID" --query appId -o tsv   # = AZURE_CLIENT_ID
+az account show --query tenantId -o tsv               # = AZURE_TENANT_ID
 ```
 
-Note the App Service name from the output (`app-xxxxxxxx`).
+> To also deploy from `main`, add a second federated credential with
+> `"subject": "repo:rpageminiai-debug/Test:ref:refs/heads/main"`.
 
-### 2. Wire up the workflow
+### 2. Add the GitHub secrets
 
-The workflow at `.github/workflows/deploy-azure.yml` deploys on push to
-`claude/clever-ptolemy-ukmatu` or `main`. Configure in the repo:
+Repo → **Settings → Secrets and variables → Actions**:
 
 | Type | Name | Value |
 |---|---|---|
-| Variable | `AZURE_WEBAPP_NAME` | the App Service name from step 1 |
-| Secret | `AZURE_WEBAPP_PUBLISH_PROFILE` | download from the App Service → *Get publish profile* |
+| Secret | `AZURE_CLIENT_ID` | the app id from step 1 |
+| Secret | `AZURE_TENANT_ID` | your tenant id |
+| Secret | `AZURE_SUBSCRIPTION_ID` | your subscription id |
+| Secret | `SQL_ADMIN_PASSWORD` | a strong password for the Azure SQL admin |
 
-```bash
-az webapp deployment list-publishing-profiles \
-  --name <app-xxxxxxxx> --resource-group rg-ltl-orders --xml
-```
+Optional **variables** to override defaults: `AZURE_RESOURCE_GROUP` (`rg-ltl-orders`),
+`AZURE_LOCATION` (`eastus`), `AZURE_ENV_NAME` (`ltl-prod`).
 
-Paste that XML into the `AZURE_WEBAPP_PUBLISH_PROFILE` secret. Push a commit (or run the
-workflow manually) and it builds + deploys.
+### 3. Run it
+
+Push to the branch (or use **Actions → Deploy LTL Order Management to Azure → Run workflow**).
+The run provisions everything and prints `✅ Deployed to https://app-….azurewebsites.net` in
+its summary — that is your link. Re-runs are idempotent.
 
 ---
 

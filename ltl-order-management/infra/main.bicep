@@ -103,5 +103,6 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
 }
 
 output AZURE_LOCATION string = location
+output WEBAPP_NAME string = webApp.name
 output WEB_URI string = 'https://${webApp.properties.defaultHostName}'
 output SQL_SERVER_FQDN string = sqlServer.properties.fullyQualifiedDomainName
