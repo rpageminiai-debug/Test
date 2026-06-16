@@ -6,6 +6,12 @@ frontend/dist/
 backend/**/bin/
 backend/**/obj/
 
+# Generated SPA bundle (built into the API at publish time)
+backend/LtlOrderManagement.Api/wwwroot/
+
+# azd local environment
+.azure/
+
 # IDE / OS
 .vs/
 .idea/

@@ -1,0 +1,21 @@
+# Azure Developer CLI (azd) configuration.
+# `azd up` provisions the infrastructure in infra/ and deploys the app in one step.
+name: ltl-order-management
+metadata:
+  template: ltl-order-management@1.0.0
+
+services:
+  web:
+    project: ./backend/LtlOrderManagement.Api
+    language: dotnet
+    host: appservice
+    # Before the .NET app is packaged, build the React SPA and copy it into wwwroot
+    # so a single App Service serves both the API and the UI.
+    hooks:
+      prepackage:
+        posix:
+          shell: sh
+          run: ../../scripts/build-frontend.sh
+        windows:
+          shell: pwsh
+          run: ../../scripts/build-frontend.ps1

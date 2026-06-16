@@ -79,6 +79,13 @@ npm install
 npm run dev           # http://localhost:5173
 ```
 
+## Deploying
+
+See [`DEPLOY.md`](./DEPLOY.md). In short: the app deploys as a single Azure App Service
+(.NET 8) serving both the API and the React SPA, backed by Azure SQL. With the Azure
+Developer CLI it is one command — `azd up` — or pushes can deploy automatically via the
+`deploy-azure.yml` GitHub Actions workflow.
+
 ## API surface
 
 | Method | Route | Purpose |

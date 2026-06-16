@@ -44,6 +44,16 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseCors(CorsPolicy);
+
+// Serve the built React SPA (copied into wwwroot at publish time). In production the API
+// and the SPA share one origin, so no CORS is needed for the app itself.
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.MapControllers();
+
+// SPA fallback: any non-API route returns index.html so client-side rendering can take over.
+// Controller routes ("/api/*") are matched first and are unaffected.
+app.MapFallbackToFile("index.html");
 
 app.Run();

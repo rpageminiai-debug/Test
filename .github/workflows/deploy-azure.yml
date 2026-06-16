@@ -1,0 +1,55 @@
+name: Deploy LTL Order Management to Azure
+
+# CI/CD for the ltl-order-management app. Builds the React SPA into the .NET API's
+# wwwroot, publishes the API, and deploys to the Azure App Service provisioned by infra/.
+#
+# Required repository configuration:
+#   - Variable  AZURE_WEBAPP_NAME            -> the App Service name (Bicep output webApp name)
+#   - Secret    AZURE_WEBAPP_PUBLISH_PROFILE -> the App Service publish profile XML
+#
+# Triggers only when files under ltl-order-management/ change.
+
+on:
+  push:
+    branches:
+      - claude/clever-ptolemy-ukmatu
+      - main
+    paths:
+      - "ltl-order-management/**"
+      - ".github/workflows/deploy-azure.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ltl-order-management
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build React SPA into API wwwroot
+        run: bash scripts/build-frontend.sh
+
+      - name: Publish .NET API
+        run: dotnet publish backend/LtlOrderManagement.Api/LtlOrderManagement.Api.csproj -c Release -o ${{ runner.temp }}/publish
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: ${{ runner.temp }}/publish
