@@ -1,0 +1,43 @@
+Requirements Walkthrough — Accounts Payable Invoice Processing
+Date: 12 June 2026
+Attendees: Priya (AP Team Lead, Acme Corp), Daniel (RPA Business Analyst)
+
+Daniel: Thanks for the time, Priya. Can you walk me through how the invoice process works today, end to end?
+
+Priya: Sure. So every morning we get supplier invoices into a shared mailbox called ap-invoices@acme.com. They come in as PDF attachments. One of my team members opens Outlook, goes through the unread emails, and downloads each PDF attachment to a folder on the shared drive.
+
+Daniel: Roughly how many invoices a day?
+
+Priya: On a normal day around 150, but at month end it can spike to 400 or so. It's quite a lot of manual effort.
+
+Priya: Once the PDFs are saved, the person opens each invoice and reads the key fields — the supplier name, the invoice number, the invoice date, the PO number, the line items and the total amount. They type all of that into our ERP, which is SAP. We log into SAP with our team credentials.
+
+Daniel: How do you find the right vendor in SAP?
+
+Priya: We search for the vendor in SAP using the supplier name or the tax ID. If we find a match, good. If the vendor doesn't exist, we can't process it, so we move that invoice to an exceptions folder and email the procurement team to set the vendor up.
+
+Daniel: And the PO matching?
+
+Priya: Right — we take the PO number from the invoice and look it up in SAP. We do a three-way match: we check the invoice amount against the purchase order and the goods receipt. If everything matches within a tolerance of two percent, we post the invoice. If the amount is over the PO, or there's no goods receipt yet, we flag it. Anything above fifty thousand pounds also needs manager approval before posting, regardless of the match.
+
+Daniel: What happens when it's posted?
+
+Priya: SAP gives us a document number. We record that document number back in a tracking spreadsheet on SharePoint, with the invoice number, supplier, amount and the date processed. Then we move the PDF into a processed folder, and we send a confirmation email to the supplier saying the invoice has been received and is scheduled for payment.
+
+Daniel: And the exceptions?
+
+Priya: For exceptions — missing vendor, price mismatch, or invoices we just can't read because the scan is poor — we log them in the same spreadsheet but mark them as exception, with the reason, and a person reviews those manually later in the day.
+
+Daniel: Are there validation rules I should know about?
+
+Priya: Yes. The invoice date can't be in the future. The invoice number has to be unique — we shouldn't pay the same invoice twice, so we check for duplicates against what's already in SAP. And the currency has to be GBP; foreign currency invoices go to a separate team.
+
+Daniel: What are you hoping automation will give you?
+
+Priya: Honestly, speed and accuracy. Right now two full-time people spend most of their day on this. We want to cut the processing time per invoice, reduce the keying errors, and free the team up for vendor queries. If the bot could run unattended overnight and have everything ready by 8am, that would be brilliant.
+
+Daniel: Last thing — any systems or access constraints?
+
+Priya: SAP is accessed through a Citrix environment. Outlook is on the desktop. SharePoint is web-based. We'd want the bot to use its own service account, not a person's login, and obviously the credentials need to be kept secure.
+
+Daniel: Perfect, that's really clear. I'll write this up as a process and solution design.

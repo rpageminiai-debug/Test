@@ -1,0 +1,16 @@
+# One-click deploy to Render (https://render.com) — gives a public https URL.
+# In Render: New + → Blueprint → point at this repo. Or use the button in the README.
+services:
+  - type: web
+    name: rpa-doc-generator
+    runtime: python
+    rootDir: rpa_doc_generator
+    plan: free
+    buildCommand: pip install -r requirements.txt gunicorn
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 180 app:app
+    envVars:
+      - key: FLASK_SECRET
+        generateValue: true
+      # Optional: set your key in the Render dashboard to enable Claude analysis.
+      - key: ANTHROPIC_API_KEY
+        sync: false
