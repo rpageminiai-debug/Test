@@ -77,6 +77,39 @@ result = generate_documents(
 print(result["sdd"], result["pdd"])
 ```
 
+## Deploy (get a public URL)
+
+The Flask dev server is for local use only. To get a real shareable `https://` URL,
+deploy with the included production config (gunicorn).
+
+**Run the production server locally:**
+
+```bash
+pip install -r requirements.txt        # includes gunicorn
+gunicorn --bind 0.0.0.0:8080 --workers 2 --threads 4 --timeout 180 app:app
+```
+
+**Docker:**
+
+```bash
+docker build -t rpa-doc-generator .
+docker run -p 8080:8080 -e ANTHROPIC_API_KEY=sk-ant-... rpa-doc-generator
+# → http://localhost:8080
+```
+
+**Render / Railway / Fly (free tiers give a public URL):**
+
+- **Render** — `render.yaml` is included (Blueprint deploy). New → Blueprint → select
+  this repo. If deploying from this subfolder, copy `render.yaml` to the repo root or
+  set the service root directory to `rpa_doc_generator`.
+- **Railway / Heroku-style** — the `Procfile` is included; point the platform at this
+  directory.
+- Set `ANTHROPIC_API_KEY` in the platform's environment variables to enable Claude
+  analysis (optional — heuristic mode works without it).
+
+> The Flask dev server (`python app.py`) only binds to `127.0.0.1` and is not reachable
+> from other machines — use one of the options above for a shareable URL.
+
 ## Project layout
 
 ```
