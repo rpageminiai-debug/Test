@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RPA Doc Generator — SDD &amp; PDD from a transcript</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <div class="logo">⚙️ RPA <strong>Doc Generator</strong></div>
+      <p class="tag">Turn a requirement-video transcript into editable
+        <b>Solution Design</b> &amp; <b>Process Design</b> documents — PPTX, with live flowcharts.</p>
+      <div class="badges">
+        {% if ai_enabled %}
+          <span class="badge ok">● Claude analysis enabled</span>
+        {% else %}
+          <span class="badge warn">● Heuristic mode — set ANTHROPIC_API_KEY for AI analysis</span>
+        {% endif %}
+        <span class="badge">Editable flowcharts &amp; tables</span>
+        <span class="badge">RPA SDD / PDD standards</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="flash">{% for m in messages %}<p>⚠️ {{ m }}</p>{% endfor %}</div>
+      {% endif %}
+    {% endwith %}
+
+    {% if result %}
+    <section class="card result">
+      <h2>✅ Documents generated</h2>
+      <div class="stats">
+        <div><span class="num">{{ result.summary.steps }}</span>process steps</div>
+        <div><span class="num">{{ result.summary.applications }}</span>applications</div>
+        <div><span class="num">{{ result.summary.nodes }}</span>flowchart nodes</div>
+        <div><span class="num">{{ 'AI' if result.summary.ai else 'Rule' }}</span>analysis</div>
+      </div>
+      <p class="proc">Process: <strong>{{ result.summary.process_name }}</strong></p>
+      <div class="downloads">
+        {% for f in result.files %}
+          <a class="dl" href="{{ f.url }}">⬇️ Download {{ f.kind }} &middot; {{ f.name }}</a>
+        {% endfor %}
+      </div>
+      <a class="again" href="{{ url_for('index') }}">↺ Generate another</a>
+    </section>
+    {% endif %}
+
+    <form class="card" method="post" action="{{ url_for('generate') }}" enctype="multipart/form-data">
+      <h2>1 &middot; Requirement transcript</h2>
+      <label class="lbl">Paste the transcript text</label>
+      <textarea name="transcript_text" rows="12"
+                placeholder="Paste the requirement video recording transcript here…"></textarea>
+      <div class="or">— or —</div>
+      <label class="lbl">Upload a transcript (.txt)</label>
+      <input type="file" name="transcript_file" accept=".txt,text/plain" />
+
+      <h2>2 &middot; Project details <span class="opt">(optional)</span></h2>
+      <div class="grid">
+        <div><label class="lbl">Process name</label><input name="process_name" placeholder="e.g. Invoice Processing" /></div>
+        <div><label class="lbl">Client</label><input name="client" placeholder="e.g. Acme Corp" /></div>
+        <div><label class="lbl">Department</label><input name="department" placeholder="e.g. Finance / AP" /></div>
+        <div><label class="lbl">Author</label><input name="author" placeholder="Your name" /></div>
+        <div><label class="lbl">Version</label><input name="version" placeholder="1.0" /></div>
+        <div>
+          <label class="lbl">Documents to generate</label>
+          <select name="which">
+            <option value="both">Both SDD &amp; PDD</option>
+            <option value="sdd">SDD only</option>
+            <option value="pdd">PDD only</option>
+          </select>
+        </div>
+      </div>
+
+      <button type="submit" class="go">Generate documents →</button>
+    </form>
+
+    <section class="card info">
+      <h3>What you get</h3>
+      <div class="cols">
+        <div>
+          <h4>Solution Design Document (SDD)</h4>
+          <p>The detailed technical blueprint: document control, scope, as-is/to-be,
+             applications, <b>keystroke-level solution steps</b>, exception handling,
+             NFRs, infrastructure, schedule &amp; volumetrics, benefits and risks —
+             plus an editable solution flow diagram.</p>
+        </div>
+        <div>
+          <h4>Process Design Document (PDD)</h4>
+          <p>The business-facing artefact: process overview, objectives, scope,
+             applications, the detailed as-is walk-through, inputs/outputs, business
+             rules and exceptions — plus an editable as-is process flow.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer class="wrap foot">RPA Doc Generator &middot; outputs are native editable PowerPoint (.pptx)</footer>
+</body>
+</html>

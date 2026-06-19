@@ -1,0 +1,11 @@
+# Generated documents & extracted models
+output/
+*.pptx
+*.pdf
+model.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
