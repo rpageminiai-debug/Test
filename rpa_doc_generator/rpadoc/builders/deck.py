@@ -7,6 +7,7 @@ auto-shapes — no images).
 
 from __future__ import annotations
 
+import math
 from typing import List, Optional, Sequence
 
 from pptx import Presentation
@@ -21,6 +22,14 @@ SLIDE_H = Inches(7.5)
 MARGIN = Inches(0.6)
 CONTENT_TOP = Inches(1.5)            # below the header band
 CONTENT_W = SLIDE_W - 2 * MARGIN
+
+# Geometry used by the height-aware table paginator (in inches).
+CONTENT_W_IN = 13.333 - 2 * 0.6
+TABLE_AREA_H_IN = 7.5 - 1.5 - 0.45            # content top to just above footer
+CELL_PAD_IN = 0.10                            # left+right cell padding allowance
+LINE_H_FACTOR = 0.0172                        # line height per pt of font size (inches)
+CHAR_W_FACTOR = 0.0072                        # avg char width per pt of font size (inches)
+MAX_CELL_CHARS = 320                          # clip pathological cells
 
 
 class Deck:
@@ -232,50 +241,121 @@ class Deck:
             r2.font.name = theme.FONT
 
     def narrative_slide(self, title: str, blocks: List[tuple], *, subtitle: str = ""):
-        """blocks: list of (heading, body) pairs."""
+        """blocks: list of (heading, body) pairs. Body is clipped to fit the slide."""
         self._slide = self._new_slide()
         self._chrome(title, subtitle, section_label=self.doc_type)
-        top = CONTENT_TOP
-        for heading, body in blocks:
-            if not body:
-                continue
-            self._add_text(MARGIN, top, CONTENT_W, Inches(0.4),
-                           [(heading, 15, True, theme.PRIMARY)])
-            top = top + Inches(0.42)
-            box = self._add_text(MARGIN, top, CONTENT_W, Inches(1.4),
-                                 [(body, 13, False, theme.DARK_TEXT)])
-            # estimate height ~ chars; keep simple, advance fixed-ish.
-            lines = max(1, (len(body) // 110) + body.count("\n") + 1)
-            top = top + Inches(0.26) * lines + Inches(0.25)
-            if top > SLIDE_H - Inches(1.0):
+        body_size = 13
+        chars_per_line = max(40, int(CONTENT_W_IN / (body_size * CHAR_W_FACTOR)))
+        line_h = body_size * LINE_H_FACTOR
+        bottom_limit = 7.5 - 0.55                      # keep clear of the footer
+        top_in = 1.5
+        live = [(h, b) for h, b in blocks if b]
+        for heading, body in live:
+            if top_in + 0.42 + line_h * 2 > bottom_limit:
                 break
+            self._add_text(MARGIN, Inches(top_in), CONTENT_W, Inches(0.4),
+                           [(heading, 15, True, theme.PRIMARY)])
+            top_in += 0.46
+            remaining_lines = max(1, int((bottom_limit - top_in - 0.3) / line_h))
+            body = self._clip_lines(body, chars_per_line, remaining_lines)
+            n_lines = self._count_lines(body, chars_per_line)
+            self._add_text(MARGIN, Inches(top_in), CONTENT_W,
+                           Inches(n_lines * line_h + 0.1),
+                           [(body, body_size, False, theme.DARK_TEXT)])
+            top_in += n_lines * line_h + 0.30
+
+    @staticmethod
+    def _count_lines(text: str, cpl: int) -> int:
+        return sum(max(1, math.ceil(len(chunk) / cpl)) for chunk in text.split("\n"))
+
+    def _clip_lines(self, text: str, cpl: int, max_lines: int) -> str:
+        if self._count_lines(text, cpl) <= max_lines:
+            return text
+        budget = max(1, max_lines * cpl - 1)
+        clipped = text[:budget].rsplit(" ", 1)[0].rstrip(" ,;:")
+        return clipped + " …"
 
     def table_slide(self, title: str, headers: Sequence[str], rows: Sequence[Sequence[str]],
                     *, col_widths: Optional[Sequence[float]] = None, subtitle: str = "",
-                    font_size: int = 10, rows_per_slide: int = 11,
+                    font_size: float = 10, rows_per_slide: Optional[int] = None,
                     empty_msg: str = "To be confirmed."):
-        rows = [list(r) for r in rows]
+        rows = [[self._clip_cell(c) for c in r] for r in rows]
         if not rows:
             rows = [[empty_msg] + [""] * (len(headers) - 1)]
-        pages = [rows[i:i + rows_per_slide] for i in range(0, len(rows), rows_per_slide)]
+
+        pages = self._paginate_rows(headers, rows, col_widths, font_size, rows_per_slide)
         for pi, page in enumerate(pages):
             self._slide = self._new_slide()
             ttl = title if len(pages) == 1 else f"{title}  ({pi+1}/{len(pages)})"
             self._chrome(ttl, subtitle, section_label=self.doc_type)
             self._draw_table(headers, page, col_widths, font_size)
 
+    # -- table sizing helpers ------------------------------------------------ #
+    @staticmethod
+    def _clip_cell(value) -> str:
+        text = "" if value is None else str(value)
+        if len(text) > MAX_CELL_CHARS:
+            text = text[: MAX_CELL_CHARS - 1].rstrip() + "…"
+        return text
+
+    @staticmethod
+    def _col_inches(headers, col_widths) -> List[float]:
+        weights = list(col_widths) if col_widths else [1.0] * len(headers)
+        total = sum(weights) or 1.0
+        return [CONTENT_W_IN * (w / total) for w in weights]
+
+    def _row_lines(self, row, col_in, font_size) -> int:
+        """Estimate how many wrapped text lines the tallest cell in ``row`` needs."""
+        lines = 1
+        for c, text in enumerate(row):
+            if c >= len(col_in):
+                break
+            usable = max(0.3, col_in[c] - CELL_PAD_IN)
+            cpl = max(3, int(usable / (font_size * CHAR_W_FACTOR)))
+            # account for explicit newlines + per-word wrapping
+            for chunk in str(text).split("\n"):
+                lines = max(lines, math.ceil(max(1, len(chunk)) / cpl))
+        return lines
+
+    def _row_height_in(self, lines, font_size) -> float:
+        return lines * font_size * LINE_H_FACTOR + 0.10
+
+    def _paginate_rows(self, headers, rows, col_widths, font_size, cap):
+        """Split rows into pages so each table fits the content area vertically."""
+        col_in = self._col_inches(headers, col_widths)
+        header_h = self._row_height_in(1, font_size + 0.5) + 0.04
+        budget = TABLE_AREA_H_IN - header_h
+        pages, page, used = [], [], 0.0
+        for row in rows:
+            rh = self._row_height_in(self._row_lines(row, col_in, font_size), font_size)
+            over_height = page and used + rh > budget
+            over_cap = cap and len(page) >= cap
+            if over_height or over_cap:
+                pages.append(page)
+                page, used = [], 0.0
+            page.append(row)
+            used += rh
+        if page:
+            pages.append(page)
+        return pages or [[["" for _ in headers]]]
+
     def _draw_table(self, headers, rows, col_widths, font_size):
         n_rows = len(rows) + 1
         n_cols = len(headers)
         left, top = MARGIN, CONTENT_TOP
         width = CONTENT_W
-        height = Inches(0.42) + Inches(0.42) * len(rows)
-        height = min(height, SLIDE_H - top - Inches(0.5))
+        col_in = self._col_inches(headers, col_widths)
+        header_h = self._row_height_in(1, font_size + 0.5) + 0.04
+        row_lines = [self._row_lines(r, col_in, font_size) for r in rows]
+        row_h = [self._row_height_in(n, font_size) for n in row_lines]
+        height = Inches(header_h + sum(row_h))
         gtable = self._slide.shapes.add_table(n_rows, n_cols, left, top, width, height)
         table = gtable.table
         table.first_row = False
         table.horz_banding = False
-        # remove built-in style banding via explicit fills below
+        table.rows[0].height = Inches(header_h)
+        for ri, h in enumerate(row_h, start=1):
+            table.rows[ri].height = Inches(h)
         if col_widths:
             total = sum(col_widths)
             for c, w in enumerate(col_widths):

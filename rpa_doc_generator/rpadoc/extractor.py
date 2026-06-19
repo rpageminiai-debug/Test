@@ -174,23 +174,63 @@ _DECISION_HINT = re.compile(r"\b(if|whether|when|check if|in case|otherwise|else
                             r"match|error|fail|exists|missing)\b", re.IGNORECASE)
 
 
+# Openers that signal the interviewer/analyst prompting rather than the SME
+# describing the process — these never become process steps.
+_INTERVIEWER_CUES = (
+    "can you", "could you", "would you", "walk me", "tell me", "talk me",
+    "how many", "how do", "how does", "what happens", "what about", "what are",
+    "and the", "and how", "thanks", "thank you", "perfect", "last thing",
+    "any systems", "are there", "is there", "do you", "let me", "okay", "ok ",
+)
+
+
+def _is_interviewer(low: str) -> bool:
+    return low.endswith("?") or "?" in low or low.startswith(_INTERVIEWER_CUES)
+
+
 def _sentences(text: str):
-    # Split transcript into utterance-ish sentences, dropping speaker labels.
+    # Split transcript into utterance-ish sentences, dropping speaker labels and
+    # metadata lines (Date:, Attendees:, etc.).
+    text = re.sub(r"^\s*(date|attendees|present|time|venue|location)\b.*$", "",
+                  text, flags=re.MULTILINE | re.IGNORECASE)
     text = re.sub(r"^\s*[A-Z][a-zA-Z .]{0,30}:\s*", "", text, flags=re.MULTILINE)
     parts = re.split(r"(?<=[.!?])\s+|\n+", text)
     return [p.strip() for p in parts if p.strip()]
 
 
+def _clean_action(sentence: str) -> str:
+    # Drop conversational fillers at the start and any trailing question fragment.
+    s = sentence.strip()
+    s = re.sub(r"^(so|right|well|yes|yeah|sure|okay|ok|and|then|now|um|uh)[,\s—-]+",
+               "", s, flags=re.IGNORECASE)
+    s = s.split("?")[0].strip()
+    if not s:
+        return ""
+    return s[0].upper() + s[1:]
+
+
 def _guess_process_name(text: str) -> str:
+    # 1) A title-case multi-word phrase ending in Processing/Process/Reconciliation…
+    m = re.search(r"\b((?:[A-Z][A-Za-z]+\s+){1,4}"
+                  r"(?:Processing|Process|Reconciliation|Onboarding|Management))\b", text)
+    if m:
+        name = m.group(1).strip()
+        return name if re.search(r"(Processing|Automation)$", name) else name + " Automation"
+    # 2) "automate the <X> process"
     m = re.search(r"automat\w*\s+(?:the\s+)?([a-z][a-z \-/]{3,50}?)(?:\s+process)\b",
                   text, re.IGNORECASE)
     if m:
-        name = m.group(1).strip().title()
-        return f"{name} Process Automation"
+        return m.group(1).strip().title() + " Process Automation"
+    # 3) "process called/named/for <X>"
     m = re.search(r"\bprocess\s+(?:called|named|is|for)\s+([a-z][a-z \-/]{3,50})",
                   text, re.IGNORECASE)
     if m:
         return m.group(1).strip().title() + " Process Automation"
+    # 4) "<X> process/invoices/orders" mentioned by the business user
+    m = re.search(r"\b(invoice|order|payment|claim|onboarding|reconciliation|"
+                  r"ticket|expense|payroll)s?\b", text, re.IGNORECASE)
+    if m:
+        return m.group(1).title() + " Processing Automation"
     return "Business Process Automation"
 
 
@@ -212,16 +252,25 @@ def _extract_heuristic(transcript: str) -> Dict[str, Any]:
     flow_edges = []
     prev = "start"
     step_no = 0
+    seen_actions = set()
 
     for sentence in sentences:
         low = sentence.lower()
+        if _is_interviewer(low):                       # skip analyst questions/prompts
+            continue
         if not any(low.startswith(v) or f" {v} " in f" {low} " for v in _ACTION_VERBS):
             continue
-        if len(sentence) < 8:
+        if len(sentence) < 12:
             continue
+        action = _clean_action(sentence).rstrip(".")
+        if len(action) < 10:
+            continue
+        # de-duplicate near-identical actions
+        key = re.sub(r"[^a-z0-9 ]", "", action.lower())[:60]
+        if key in seen_actions:
+            continue
+        seen_actions.add(key)
         step_no += 1
-        action = sentence[0].upper() + sentence[1:]
-        action = action.rstrip(".")
         app_match = _APP_HINT.search(sentence)
         app = app_match.group(0) if app_match else ""
         is_decision = bool(_DECISION_HINT.search(sentence)) and step_no > 1
